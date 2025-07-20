@@ -24,7 +24,7 @@ A Model Context Protocol (MCP) server that provides integration with Bear App us
 chmod +x ./setup.sh && ./setup.sh
 ```
 
-## Manually Installation
+## Manual Installation
 
 1. Clone and go to the project:
 ```bash

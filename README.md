@@ -41,7 +41,7 @@ npm run build
 ```
 4. Build binaries:
 ```bash
-/path/to/bear-mcp-server/dist/bear_mcp_server.js
+/path/to/bear-mcp-server/dist/index.js
 ```
 
 ## Getting Bear API Token
@@ -62,7 +62,7 @@ Add the server to your MCP client configuration. For Claude Desktop, add to your
   "mcpServers": {
     "bear": {
       "command": "node",
-      "args": ["/path/to/bear-mcp-server/dist/bear_mcp_server.js"],
+      "args": ["/path/to/bear-mcp-server/dist/index.js"],
       "env": {
         "BEAR_TOKEN": "your-bear-api-token-here"
       }

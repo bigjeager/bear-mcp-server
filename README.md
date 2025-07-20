@@ -14,29 +14,34 @@ A Model Context Protocol (MCP) server that provides integration with Bear App us
 
 ## Requirements
 
-- macOS (Bear App is macOS/iOS only)
+- macOS (Bear App is macOS only)
 - Bear App installed and running
 - Node.js 18+ 
 - Bear API token (for some operations)
 
-## Installation
-
-1. Clone or create the project:
+## Quick Installation
 ```bash
-mkdir bear-mcp-server
-cd bear-mcp-server
+chmod +x ./setup.sh && ./setup.sh
 ```
 
-2. Save the TypeScript code as `src/index.ts`
+## Manually Installation
 
-3. Install dependencies:
+1. Clone and go to the project:
+```bash
+git clone https://github.com/bigjeager/bear-mcp-server.git
+cd bear-mcp-server/
+```
+2. Install dependencies:
 ```bash
 npm install
 ```
-
-4. Build the project:
+3. Build the project:
 ```bash
 npm run build
+```
+4. Build binaries:
+```bash
+/path/to/bear-mcp-server/dist/bear_mcp_server.js
 ```
 
 ## Getting Bear API Token
@@ -48,12 +53,6 @@ Some operations require a Bear API token:
 2. Go to `Help` → `Advanced` → `API Token` → `Copy Token`
 3. The token will be copied to your clipboard
 
-**On iOS:**
-1. Open Bear App
-2. Go to Preferences → Advanced
-3. Locate the API Token section
-4. Tap to generate or copy the token
-
 ## Configuration
 
 Add the server to your MCP client configuration. For Claude Desktop, add to your `claude_desktop_config.json`:
@@ -63,7 +62,7 @@ Add the server to your MCP client configuration. For Claude Desktop, add to your
   "mcpServers": {
     "bear": {
       "command": "node",
-      "args": ["/path/to/bear-mcp-server/dist/index.js"],
+      "args": ["/path/to/bear-mcp-server/dist/bear_mcp_server.js"],
       "env": {
         "BEAR_TOKEN": "your-bear-api-token-here"
       }
@@ -103,73 +102,6 @@ Add the server to your MCP client configuration. For Claude Desktop, add to your
 
 - **bear_grab_url**: Create notes from web page content
 
-## Usage Examples
-
-### Create a New Note
-```javascript
-// Creates a note with title, content, and tags
-{
-  "tool": "bear_create_note",
-  "arguments": {
-    "title": "Meeting Notes",
-    "text": "## Agenda\n- Review project status\n- Discuss next steps",
-    "tags": "work,meetings",
-    "pin": true
-  }
-}
-```
-
-### Search Notes
-```javascript
-// Search for notes containing "project" in the "work" tag
-{
-  "tool": "bear_search", 
-  "arguments": {
-    "term": "project",
-    "tag": "work",
-    "token": "your-bear-token"
-  }
-}
-```
-
-### Add Text to Existing Note
-```javascript
-// Append text to a note
-{
-  "tool": "bear_add_text",
-  "arguments": {
-    "id": "note-id-here",
-    "text": "\n## Follow-up Actions\n- Send summary email",
-    "mode": "append",
-    "new_line": true
-  }
-}
-```
-
-### Get All Tags
-```javascript
-// Retrieve all tags (requires token)
-{
-  "tool": "bear_get_tags",
-  "arguments": {
-    "token": "your-bear-token"
-  }
-}
-```
-
-### Create Note from Web Page
-```javascript
-// Grab content from a URL
-{
-  "tool": "bear_grab_url",
-  "arguments": {
-    "url": "https://example.com/article",
-    "tags": "research,reading",
-    "pin": false
-  }
-}
-```
-
 ## Security Notes
 
 - The server uses macOS `open` command to execute Bear URLs
@@ -189,26 +121,9 @@ Build for production:
 npm run build
 ```
 
-## Troubleshooting
-
-### Bear URLs Not Working
-- Ensure Bear App is installed and running
-- Check that Bear is not in a locked state
-- Verify the note IDs are correct (Bear uses unique identifiers)
-
-### Token Issues
-- Generate a new token if operations fail
-- iOS and macOS tokens are platform-specific
-- Some operations work without tokens but return limited data
-
-### Permission Issues
-- Some operations require Bear to be the active application
-- Encrypted notes cannot be accessed via URLs
-- Locked notes may not be accessible
-
 ## Limitations
 
-- macOS/iOS only (Bear App limitation)
+- macOS only (Bear App limitation)
 - Some operations require user interaction with Bear
 - Response data is limited compared to direct API access
 - File attachments require base64 encoding

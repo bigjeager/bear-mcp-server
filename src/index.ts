@@ -10,6 +10,8 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { exec } from "child_process";
 import { promisify } from "util";
+import { createServer } from "http";
+import { URL } from "url";
 
 const execAsync = promisify(exec);
 
@@ -83,6 +85,111 @@ class BearMCPServer {
     const queryString = queryParts.join('&');
     return queryString ? `${baseURL}?${queryString}` : baseURL;
   }
+
+  private async executeWithCallback(action: string, params: Record<string, string | boolean> = {}): Promise<any> {
+    return new Promise((resolve, reject) => {
+      // Create a temporary HTTP server to receive the callback
+      const server = createServer((req, res) => {
+        if (req.url) {
+          const url = new URL(req.url, 'http://localhost');
+          const searchParams = url.searchParams;
+          
+          try {
+            // Extract all callback parameters dynamically
+            const callbackData: Record<string, any> = {};
+            
+            for (const [key, value] of searchParams.entries()) {
+              if (key === 'notes' || key === 'tags') {
+                // Handle JSON array parameters
+                try {
+                  callbackData[key] = JSON.parse(value);
+                } catch {
+                  // If JSON parsing fails, treat as regular string
+                  callbackData[key] = value;
+                }
+              } else if (key === 'tags' && !callbackData[key]) {
+                // Handle comma-separated tags for open-note
+                callbackData[key] = value ? value.split(',').filter(Boolean) : [];
+              } else if (key === 'is_trashed' || key === 'pin') {
+                // Handle boolean parameters
+                callbackData[key] = value === 'yes';
+              } else {
+                // Handle regular string parameters
+                callbackData[key] = value;
+              }
+            }
+
+            // Send HTML response that immediately closes the browser window
+            res.writeHead(200, { 
+              'Content-Type': 'text/html',
+              'X-Frame-Options': 'DENY',
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0'
+            });
+            
+            const closeHtml = `
+              <!DOCTYPE html>
+              <html>
+              <head>
+                <meta charset="utf-8">
+                <meta http-equiv="refresh" content="0; url=about:blank">
+                <title>Bear MCP Callback</title>
+                <style>body { display: none; }</style>
+              </head>
+              <body>
+                <script>
+                  // Multiple methods to close the window immediately
+                  try {
+                    window.close();
+                    window.open('', '_self', '');
+                    window.close();
+                    setTimeout(() => window.close(), 1);
+                    setTimeout(() => history.back(), 10);
+                  } catch(e) {}
+                </script>
+              </body>
+              </html>
+            `;
+            
+            res.end(closeHtml);
+            
+            server.close();
+            resolve(callbackData);
+          } catch (error) {
+            res.writeHead(500, { 'Content-Type': 'text/plain' });
+            res.end('Error parsing callback data');
+            server.close();
+            reject(new Error(`Failed to parse callback data: ${error instanceof Error ? error.message : String(error)}`));
+          }
+        }
+      });
+
+      // Start server on a random available port
+      server.listen(0, () => {
+        const address = server.address();
+        if (address && typeof address === 'object') {
+          const callbackUrl = `http://localhost:${address.port}/callback`;
+          
+          // Add x-success callback URL to params
+          params['x-success'] = callbackUrl;
+          
+          // Build and execute Bear URL
+          const bearUrl = this.buildBearURL(action, params);
+          this.executeURL(bearUrl).catch(reject);
+          
+          // Set timeout to avoid hanging forever
+          setTimeout(() => {
+            server.close();
+            reject(new Error('Callback timeout'));
+          }, 10000);
+        } else {
+          reject(new Error('Failed to start callback server'));
+        }
+      });
+    });
+  }
+
 
   private setupToolHandlers() {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -658,31 +765,17 @@ class BearMCPServer {
     if (args.open_note) params.open_note = "yes";
     if (args.search) params.search = args.search;
 
-    const url = this.buildBearURL("open-note", params);
-    const result = await this.executeURL(url);
-
-    // Parse the result as JSON to get the note content
-    try {
-      const response: BearResponse = JSON.parse(result);
-      return {
-        content: [
-          {
-            type: "text",
-            text: response.note || `Opened note in Bear${args.id ? ` with ID: ${args.id}` : args.title ? ` with title: ${args.title}` : ""}`
-          }
-        ]
-      };
-    } catch (error) {
-      // If JSON parsing fails, return the raw result or fallback message
-      return {
-        content: [
-          {
-            type: "text",
-            text: result || `Opened note in Bear${args.id ? ` with ID: ${args.id}` : args.title ? ` with title: ${args.title}` : ""}`
-          }
-        ]
-      };
-    }
+    // Set up a temporary HTTP server to capture the x-success callback
+    const noteData = await this.executeWithCallback("open-note", params);
+    
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(noteData, null, 2)
+        }
+      ]
+    };
   }
 
   private async createNote(args: any) {
@@ -704,14 +797,16 @@ class BearMCPServer {
     if (args.type) params.type = args.type;
     if (args.url) params.url = args.url;
 
-    const url = this.buildBearURL("create", params);
-    await this.executeURL(url);
+    const noteData = await this.executeWithCallback("create", params);
 
     return {
       content: [
         {
           type: "text",
-          text: `Created new note in Bear${args.title ? ` with title: ${args.title}` : ""}`
+          text: JSON.stringify({
+            message: `Created new note in Bear${args.title ? ` with title: ${args.title}` : ""}`,
+            note: noteData
+          }, null, 2)
         }
       ]
     };
@@ -756,14 +851,16 @@ class BearMCPServer {
     if (args.token) params.token = args.token;
     if (args.show_window) params.show_window = "yes";
 
-    const url = this.buildBearURL("search", params);
-    await this.executeURL(url);
+    const searchData = await this.executeWithCallback("search", params);
 
     return {
       content: [
         {
           type: "text",
-          text: `Searched Bear for: ${args.term || "all notes"}${args.tag ? ` in tag: ${args.tag}` : ""}`
+          text: JSON.stringify({
+            message: `Searched Bear for: ${args.term || "all notes"}${args.tag ? ` in tag: ${args.tag}` : ""}`,
+            results: searchData
+          }, null, 2)
         }
       ]
     };
@@ -775,14 +872,16 @@ class BearMCPServer {
     }
 
     const params = { token: args.token };
-    const url = this.buildBearURL("tags", params);
-    await this.executeURL(url);
+    const tagsData = await this.executeWithCallback("tags", params);
 
     return {
       content: [
         {
           type: "text",
-          text: "Retrieved all tags from Bear"
+          text: JSON.stringify({
+            message: "Retrieved all tags from Bear",
+            tags: tagsData
+          }, null, 2)
         }
       ]
     };
@@ -794,14 +893,16 @@ class BearMCPServer {
     if (args.token) params.token = args.token;
     if (args.show_window) params.show_window = "yes";
 
-    const url = this.buildBearURL("open-tag", params);
-    await this.executeURL(url);
+    const tagData = await this.executeWithCallback("open-tag", params);
 
     return {
       content: [
         {
           type: "text",
-          text: `Opened notes with tag: ${args.name}`
+          text: JSON.stringify({
+            message: `Opened notes with tag: ${args.name}`,
+            notes: tagData
+          }, null, 2)
         }
       ]
     };
@@ -854,14 +955,16 @@ class BearMCPServer {
     if (args.token) params.token = args.token;
     if (args.show_window) params.show_window = "yes";
 
-    const url = this.buildBearURL("untagged", params);
-    await this.executeURL(url);
+    const untaggedData = await this.executeWithCallback("untagged", params);
 
     return {
       content: [
         {
           type: "text",
-          text: `Retrieved untagged notes${args.search ? ` matching: ${args.search}` : ""}`
+          text: JSON.stringify({
+            message: `Retrieved untagged notes${args.search ? ` matching: ${args.search}` : ""}`,
+            notes: untaggedData
+          }, null, 2)
         }
       ]
     };
@@ -874,14 +977,16 @@ class BearMCPServer {
     if (args.token) params.token = args.token;
     if (args.show_window) params.show_window = "yes";
 
-    const url = this.buildBearURL("todo", params);
-    await this.executeURL(url);
+    const todoData = await this.executeWithCallback("todo", params);
 
     return {
       content: [
         {
           type: "text",
-          text: `Retrieved todo notes${args.search ? ` matching: ${args.search}` : ""}`
+          text: JSON.stringify({
+            message: `Retrieved todo notes${args.search ? ` matching: ${args.search}` : ""}`,
+            notes: todoData
+          }, null, 2)
         }
       ]
     };
@@ -894,14 +999,16 @@ class BearMCPServer {
     if (args.token) params.token = args.token;
     if (args.show_window) params.show_window = "yes";
 
-    const url = this.buildBearURL("today", params);
-    await this.executeURL(url);
+    const todayData = await this.executeWithCallback("today", params);
 
     return {
       content: [
         {
           type: "text",
-          text: `Retrieved today's notes${args.search ? ` matching: ${args.search}` : ""}`
+          text: JSON.stringify({
+            message: `Retrieved today's notes${args.search ? ` matching: ${args.search}` : ""}`,
+            notes: todayData
+          }, null, 2)
         }
       ]
     };
@@ -961,14 +1068,16 @@ class BearMCPServer {
     if (args.pin) params.pin = "yes";
     if (args.wait) params.wait = "yes";
 
-    const url = this.buildBearURL("grab-url", params);
-    await this.executeURL(url);
+    const grabData = await this.executeWithCallback("grab-url", params);
 
     return {
       content: [
         {
           type: "text",
-          text: `Created note from URL: ${args.url}`
+          text: JSON.stringify({
+            message: `Created note from URL: ${args.url}`,
+            note: grabData
+          }, null, 2)
         }
       ]
     };

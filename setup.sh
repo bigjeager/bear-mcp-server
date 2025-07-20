@@ -45,7 +45,7 @@ echo "🔨 Building TypeScript..."
 npm run build
 
 # Make the binary executable
-chmod +x dist/bear_mcp_server.js
+chmod +x dist/index.js
 
 echo "✅ Build complete!"
 
@@ -72,7 +72,7 @@ if [ -f "$CLAUDE_CONFIG" ]; then
   "mcpServers": {
     "bear": {
       "command": "node",
-      "args": ["$(pwd)/dist/bear_mcp_server.js"],
+      "args": ["$(pwd)/dist/index.js"],
       "env": {
         "BEAR_TOKEN": "your-bear-api-token-here"
       }

@@ -2,6 +2,10 @@
 
 A Model Context Protocol (MCP) server that provides integration with Bear App using its X-callback-URL scheme. This server enables AI assistants to interact with Bear notes, create new content, search, and manage tags.
 
+<a href="https://glama.ai/mcp/servers/@bigjeager/bear-mcp-server">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/@bigjeager/bear-mcp-server/badge" alt="Bear App Server MCP server" />
+</a>
+
 ## Features
 
 - **Note Management**: Create, open, and modify notes with full metadata retrieval
@@ -154,7 +158,7 @@ The following tools use advanced callback integration for enhanced data retrieva
 
 - macOS only (Bear App limitation)
 - Some operations require user interaction with Bear
-- Callback operations have 10-second timeout limit (with automatic fallback)
+- Callback operations have a 10-second timeout limit (with automatic fallback)
 - File attachments require base64 encoding
 - Bear must be unlocked for encrypted note access
 - Brief browser window flash may occur (auto-closes within milliseconds)
